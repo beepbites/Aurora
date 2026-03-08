@@ -26,6 +26,7 @@ try:
     from MOMOKA.music.plugins.ytdlp_wrapper import Track, extract as extract_audio_data, ensure_stream
     from MOMOKA.music.error.errors import MusicCogExceptionHandler
     from MOMOKA.music.plugins.audio_mixer import AudioMixer, MusicAudioSource
+    from MOMOKA.music.plugins.voice_dave_patch import apply_dave_patch
 except ImportError as e:
     print(f"[CRITICAL] MusicCog: 必須コンポーネントのインポートに失敗しました。エラー: {e}")
     Track = None
@@ -34,6 +35,7 @@ except ImportError as e:
     MusicCogExceptionHandler = None
     AudioMixer = None
     MusicAudioSource = None
+    apply_dave_patch = None
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +181,17 @@ class MusicCog(commands.Cog, name="music_cog"):
         self.cleanup_task = None
 
     async def cog_load(self):
+        # DAVE (Discord Audio Visual Encryption) プロトコル対応パッチを適用
+        # discord.py が DAVE 未対応のため、WebSocket close code 4017 で切断される問題を解消
+        if apply_dave_patch:
+            try:
+                # ボイスWebSocketの IDENTIFY/RESUME/received_message をパッチ
+                result = apply_dave_patch()
+                if result:
+                    logger.info("DAVE protocol patch applied successfully")
+            except Exception as e:
+                logger.warning(f"DAVE protocol patch failed (non-fatal): {e}")
+
         if not self.cleanup_task or self.cleanup_task.done():
             self.cleanup_task = self.cleanup_task_loop.start()
         logger.info("MusicCog loaded and cleanup task started")
