@@ -1,27 +1,21 @@
 # MOMOKA/music/plugins/voice_dave_patch.py
 """
-Discord DAVE (Discord Audio Visual Encryption) プロトコル対応パッチ。
+Discord DAVE (Discord Audio Visual Encryption) 互換のためのレガシー・モンキーパッチ。
 
-discord.py 2.x はボイスゲートウェイの DAVE (E2EE) プロトコルに未対応のため、
-Discord 側から WebSocket close code 4017 で切断される問題を解消する。
+discord.py 2.7.0 未満ではボイスゲートウェイの DAVE に未対応のため、
+IDENTIFY 等を補う。2.7.0 以降はライブラリ側で DAVE + davey が使われるため
+本パッチは適用しない（オペコード番号も 2.7 で再定義されており競合する）。
 
-このモジュールは discord.py のボイスWebSocket処理をモンキーパッチし、
-以下の変更を適用する:
-  1. IDENTIFY ペイロードに max_dave_protocol_version: 0 を追加
-     → ボットが DAVE 非対応であることを宣言し、サーバー側に DAVE を強制させない
-  2. DAVE 関連オペコード (21-28) をハンドリング
-     → 未知のオペコードで例外が発生するのを防止
-  3. DAVE_PREPARE_TRANSITION (op 23) への応答
-     → DAVE_EXECUTE_TRANSITION (op 24) を送信して遷移を完了させる
+Discord が E2EE を要求する場合、max_dave_protocol_version: 0 だけでは 4017 で
+拒否される。対策は discord.py>=2.7.0 と davey の導入。
 
-参考:
-  - Discord Voice Gateway v8 仕様
-  - DAVE Protocol (Discord Audio Visual Encryption)
-  - Close Code 4017: DAVE プロトコル未対応による切断
+参考: Rapptz/discord.py PR #10300、Close Code 4017
 """
 
 import logging
 from typing import Any, Dict
+
+import discord
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +42,22 @@ def apply_dave_patch() -> bool:
         bool: パッチ適用に成功した場合 True、既に適用済みまたは失敗時は False
     """
     global _patched
+
+    # 2.7+ はネイティブ DAVE（davey）。古いパッチはオペコードが一致せず有害
+    if discord.version_info >= (2, 7, 0):
+        try:
+            import davey  # noqa: F401
+        except ImportError:
+            logger.warning(
+                "DAVE: discord.py 2.7+ でボイスを使うには pip install davey が必要です "
+                "(未導入時は max_dave_protocol_version=0 のみとなり 4017 になることがあります)。"
+            )
+        else:
+            logger.info(
+                "DAVE: discord.py %s — ネイティブ DAVE 対応のためモンキーパッチはスキップします。",
+                discord.__version__,
+            )
+        return False
 
     # 二重適用を防止
     if _patched:

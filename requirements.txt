@@ -1,8 +1,8 @@
 # Project MOMOKA requirements (legacy local pipeline)
 --extra-index-url https://download.pytorch.org/whl/cu118
 
-discord.py
-discord.py[voice]
+# 2.7.0 以降: ボイスゲートウェイの DAVE (E2EE) ネイティブ対応。davey 必須（未導入だと 4017）。
+discord.py[voice]>=2.7.0
 davey
 aiohttp
 openai

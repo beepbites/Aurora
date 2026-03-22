@@ -181,8 +181,7 @@ class MusicCog(commands.Cog, name="music_cog"):
         self.cleanup_task = None
 
     async def cog_load(self):
-        # DAVE (Discord Audio Visual Encryption) プロトコル対応パッチを適用
-        # discord.py が DAVE 未対応のため、WebSocket close code 4017 で切断される問題を解消
+        # DAVE: 2.6 系向けモンキーパッチ / 2.7+ は discord.py ネイティブ + davey（voice_dave_patch 内で分岐）
         if apply_dave_patch:
             try:
                 # ボイスWebSocketの IDENTIFY/RESUME/received_message をパッチ
