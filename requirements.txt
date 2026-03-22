@@ -3,6 +3,7 @@
 
 discord.py
 discord.py[voice]
+davey
 aiohttp
 openai
 pyyaml
