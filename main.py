@@ -16,20 +16,20 @@ import platform
 from io import StringIO
 import aiohttp
 
-# --- グローバル変数 ---
+# --- Global variables ---
 log_viewer_thread = None
 
 
-# モバイルアプリとして識別するための関数
+# Function to identify as a mobile app
 async def mobile_identify(self):
-    """Discordのモバイルアプリとして識別するための関数"""
-    # 通常のidentifyペイロードを取得
+    """Function to identify as a Discord mobile app"""
+    # Get normal identify payload
     payload = {
         'op': self.IDENTIFY,
         'd': {
             'token': self.token,
             'properties': {
-                '$os': 'iOS',  # モバイルアプリとして識別
+                '$os': 'iOS',  # Identify as a mobile app
                 '$browser': 'Discord iOS',
                 '$device': 'iPhone',
                 '$referrer': '',
@@ -41,11 +41,11 @@ async def mobile_identify(self):
         }
     }
 
-    # 必要に応じてintentsを追加
+    # Add intents as needed
     if hasattr(self._connection, 'intents') and self._connection.intents is not None:
         payload['d']['intents'] = self._connection.intents.value
 
-    # プレゼンス情報を追加（存在する場合）
+    # Add presence information (if it exists)
     if hasattr(self._connection, '_activity') or hasattr(self._connection, '_status'):
         presence = {}
         if hasattr(self._connection, '_status'):
@@ -60,29 +60,29 @@ async def mobile_identify(self):
             })
             payload['d']['presence'] = presence
 
-    # 識別情報を送信
+    # Send identification information
     if hasattr(self, 'call_hooks'):
         await self.call_hooks('before_identify', self.shard_id, initial=getattr(self, '_initial_identify', False))
     await self.send_as_json(payload)
 
 
 def set_dark_mode():
-    """Windowsのダークモードを有効化"""
+    """Enable Windows dark mode"""
     try:
-        if os.name == 'nt':  # Windowsのみ
-            # ダークモードを有効化
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # DPI認識を有効化
+        if os.name == 'nt':  # Windows only
+            # Enable dark mode
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Enable DPI awareness
 
-            # テーマカラーをダークモードに設定
+            # Set theme color to dark mode
             try:
                 import darkdetect
                 if darkdetect.isDark():
                     from ctypes import wintypes
 
-                    # ウィンドウのテーマカラーをダークに設定
+                    # Set window theme color to dark
                     DWMWA_USE_IMMERSIVE_DARK_MODE = 20
                     hwnd = ctypes.windll.user32.GetForegroundWindow()
-                    value = 1  # ダークモード
+                    value = 1  # Dark mode
                     ctypes.windll.dwmapi.DwmSetWindowAttribute(
                         hwnd,
                         DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -90,20 +90,20 @@ def set_dark_mode():
                         ctypes.sizeof(ctypes.c_int(value))
                     )
             except ImportError:
-                pass  # darkdetectが利用できない場合はスキップ
+                pass  # Skip if darkdetect is not available
     except Exception as e:
-        print(f"ダークモードの設定中にエラーが発生しました: {e}")
+        print(f"Error occurred while setting dark mode: {e}")
 
 
-# ダークモードを有効化
+# Enable dark mode
 set_dark_mode()
 
-# --- ロギング設定の初期化 ---
-# ルートロガーの設定
+# --- Initialize logging settings ---
+# Configure root logger
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)
 
-# 特定のロガーのログレベル設定
+# Configure logging for specific loggers
 logging.getLogger('discord').setLevel(logging.WARNING)
 logging.getLogger('openai').setLevel(logging.WARNING)
 logging.getLogger('google.generativeai').setLevel(logging.WARNING)
@@ -112,12 +112,12 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('asyncio').setLevel(logging.WARNING)
 logging.getLogger('PIL').setLevel(logging.WARNING)
 
-# ログキューの作成（GUIログビューアと共有）
+# Create log queue (shared with GUI log viewer)
 log_queue = queue.Queue()
 
 
 class QueueHandler(logging.Handler):
-    """ログをキューに送信するハンドラ"""
+    """Handler that sends logs to a queue"""
 
     def __init__(self, log_queue):
         super().__init__()
@@ -132,7 +132,7 @@ class QueueHandler(logging.Handler):
 
 
 class StdoutCapture:
-    """標準出力をキャプチャしてログキューに送信するクラス"""
+    """Class that captures stdout and sends it to log queue"""
     
     def __init__(self, log_queue, original_stdout):
         self.log_queue = log_queue
@@ -140,39 +140,39 @@ class StdoutCapture:
         self.buffer = StringIO()
     
     def write(self, text):
-        """標準出力への書き込みをキャプチャ"""
-        # 元の標準出力にも書き込む（コンソールにも表示）
+        """Capture stdout writes"""
+        # Also write to original stdout (display in console)
         self.original_stdout.write(text)
         self.original_stdout.flush()
         
-        # 空行や改行のみの場合はスキップ
+        # Skip if empty lines or newlines only
         if not text.strip():
             return
         
-        # ログキューに送信
+        # Send to log queue
         try:
-            # 各行を個別に処理
+            # Process each line individually
             for line in text.rstrip().split('\n'):
                 if line.strip():
-                    # 標準出力のログとして扱う
+                    # Treat as stdout log
                     log_entry = f"{line}"
                     self.log_queue.put(("stdout", "INFO", log_entry))
         except Exception:
-            pass  # エラーが発生しても元の標準出力は動作させる
+            pass  # Let original stdout work even if error occurs
     
     def flush(self):
-        """フラッシュ処理"""
+        """Flush operation"""
         self.original_stdout.flush()
         if hasattr(self.buffer, 'flush'):
             self.buffer.flush()
 
 
-# キューにログを送信するハンドラを追加（GUIログビューア用）
+# Add handler to send logs to queue (for GUI log viewer)
 queue_handler = QueueHandler(log_queue)
 root_logger.addHandler(queue_handler)
-# 注意: DiscordLogHandlerはsetup_hook内で追加されるため、GUIとDiscordの両方にログが送信されます
+# Note: DiscordLogHandler is added in setup_hook, so logs are sent to both GUI and Discord
 
-# 標準出力をキャプチャしてGUIにも表示
+# Capture stdout and display in GUI
 original_stdout = sys.stdout
 stdout_capture = StdoutCapture(log_queue, original_stdout)
 sys.stdout = stdout_capture
@@ -182,14 +182,14 @@ from MOMOKA.utilities.error.errors import InvalidDiceNotationError, DiceValueErr
 
 
 class Momoka(commands.Bot):
-    """MOMOKA Botのメインクラス"""
+    """Main class for MOMOKA Bot"""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = None
         self.status_templates = []
         self.status_index = 0
-        # ロードするCogのリスト
+        # List of Cogs to load
         self.cogs_to_load = [
             'MOMOKA.images.image_commands_cog',
             'MOMOKA.llm.llm_cog',
@@ -207,52 +207,52 @@ class Momoka(commands.Bot):
         ]
 
     def is_admin(self, user_id: int) -> bool:
-        """ユーザーが管理者かどうかをチェック"""
+        """Check if user is an admin"""
         admin_ids = self.config.get('admin_user_ids', [])
         return user_id in admin_ids
 
     async def setup_hook(self):
-        """Botの初期セットアップ（ログイン後、接続準備完了前）"""
-        # 設定ファイルの読み込み
+        """Bot initial setup (after login, before connection ready)"""
+        # Load configuration file
         if not os.path.exists(CONFIG_FILE):
             if os.path.exists(DEFAULT_CONFIG_FILE):
                 try:
                     shutil.copyfile(DEFAULT_CONFIG_FILE, CONFIG_FILE)
                     logging.info(
-                        f"{CONFIG_FILE} が見つからなかったため、{DEFAULT_CONFIG_FILE} からコピーして生成しました。")
-                    logging.warning(f"生成された {CONFIG_FILE} を確認し、ボットトークンやAPIキーを設定してください。")
+                        f"{CONFIG_FILE} was not found, so it was generated by copying from {DEFAULT_CONFIG_FILE}.")
+                    logging.warning(f"Please verify the generated {CONFIG_FILE} and set the bot token and API keys.")
                 except Exception as e_copy:
                     print(
-                        f"CRITICAL: {DEFAULT_CONFIG_FILE} から {CONFIG_FILE} のコピー中にエラーが発生しました: {e_copy}")
-                    raise RuntimeError(f"{CONFIG_FILE} の生成に失敗しました。")
+                        f"CRITICAL: Error occurred while copying {CONFIG_FILE} from {DEFAULT_CONFIG_FILE}: {e_copy}")
+                    raise RuntimeError(f"Failed to generate {CONFIG_FILE}.")
             else:
-                print(f"CRITICAL: {CONFIG_FILE} も {DEFAULT_CONFIG_FILE} も見つかりません。設定ファイルがありません。")
-                raise FileNotFoundError(f"{CONFIG_FILE} も {DEFAULT_CONFIG_FILE} も見つかりません。")
+                print(f"CRITICAL: Neither {CONFIG_FILE} nor {DEFAULT_CONFIG_FILE} found. No configuration file exists.")
+                raise FileNotFoundError(f"Neither {CONFIG_FILE} nor {DEFAULT_CONFIG_FILE} found.")
 
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 self.config = yaml.safe_load(f)
                 if not self.config:
-                    print(f"CRITICAL: {CONFIG_FILE} が空または無効です。ボットを起動できません。")
-                    raise RuntimeError(f"{CONFIG_FILE} が空または無効です。")
-            logging.info(f"{CONFIG_FILE} を正常に読み込みました。")
+                    print(f"CRITICAL: {CONFIG_FILE} is empty or invalid. Bot cannot start.")
+                    raise RuntimeError(f"{CONFIG_FILE} is empty or invalid.")
+            logging.info(f"Successfully loaded {CONFIG_FILE}.")
         except Exception as e:
-            print(f"CRITICAL: {CONFIG_FILE} の読み込みまたは解析中にエラーが発生しました: {e}")
+            print(f"CRITICAL: Error occurred while reading or parsing {CONFIG_FILE}: {e}")
             raise
 
-        # ステータスローテーションの設定
+        # Configure status rotation
         self.status_templates = self.config.get('status_rotation', [
             "operating on {guild_count} servers",
             "prjMOMOKA Ver.2026-02-13",
         ])
         self.rotate_status.start()
 
-        # ロギング設定
+        # Logging configuration
         logging_json_path = "data/logging_channels.json"
         log_channel_ids_from_config = self.config.get('log_channel_ids', [])
         if not isinstance(log_channel_ids_from_config, list):
             log_channel_ids_from_config = []
-            logging.warning("config.yaml の 'log_channel_ids' はリスト形式である必要があります。")
+            logging.warning("'log_channel_ids' in config.yaml must be in list format.")
 
         log_channel_ids_from_file = []
         try:
@@ -261,53 +261,53 @@ class Momoka(commands.Bot):
             if not os.path.exists(logging_json_path):
                 with open(logging_json_path, 'w') as f:
                     json.dump([], f)
-                logging.info(f"{logging_json_path} が見つからなかったため、新規作成しました。")
+                logging.info(f"{logging_json_path} was not found, so it was created.")
 
             with open(logging_json_path, 'r') as f:
                 data = json.load(f)
                 if isinstance(data, list) and all(isinstance(i, int) for i in data):
                     log_channel_ids_from_file = data
         except (json.JSONDecodeError, IOError) as e:
-            logging.error(f"{logging_json_path} の処理中にエラーが発生しました: {e}")
+            logging.error(f"Error occurred while processing {logging_json_path}: {e}")
 
         all_log_channel_ids = list(set(log_channel_ids_from_config + log_channel_ids_from_file))
 
         if all_log_channel_ids:
             try:
-                # DiscordLogHandlerを追加（GUIログビューアと並行して動作）
-                # 両方のハンドラが同じroot_loggerに追加されているため、
-                # すべてのログがGUIとDiscordの両方に送信されます
+                # Add DiscordLogHandler (works in parallel with GUI log viewer)
+                # Since both handlers are added to the same root_logger,
+                # all logs are sent to both GUI and Discord
                 discord_handler = DiscordLogHandler(bot=self, channel_ids=all_log_channel_ids, interval=6.0)
                 discord_handler.setLevel(logging.INFO)
                 discord_formatter = DiscordLogFormatter('%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s')
                 discord_handler.setFormatter(discord_formatter)
                 root_logger.addHandler(discord_handler)
-                logging.info(f"DiscordへのロギングをチャンネルID {all_log_channel_ids} で有効化しました。")
+                logging.info(f"Discord logging enabled for channel IDs {all_log_channel_ids}.")
             except Exception as e:
-                logging.error(f"DiscordLogHandler の初期化中にエラーが発生しました: {e}")
+                logging.error(f"Error occurred while initializing DiscordLogHandler: {e}")
         else:
-            logging.warning("ログ送信先のDiscordチャンネルが設定されていません。")
+            logging.warning("No Discord channel configured for logging.")
 
-        # Cogのロード
-        logging.info("Cogのロードを開始します...")
+        # Load Cogs
+        logging.info("Starting to load Cogs..."
         loaded_cogs_count = 0
         for module_path in self.cogs_to_load:
             try:
                 await self.load_extension(module_path)
-                logging.info(f"  > Cog '{module_path}' のロードに成功しました。")
+                logging.info(f"  > Successfully loaded Cog '{module_path}'.")
                 loaded_cogs_count += 1
             except commands.ExtensionAlreadyLoaded:
-                logging.debug(f"Cog '{module_path}' は既にロードされています。")
+                logging.debug(f"Cog '{module_path}' is already loaded.")
             except commands.ExtensionNotFound:
-                logging.error(f"  > Cog '{module_path}' が見つかりません。ファイルパスを確認してください。")
+                logging.error(f"  > Cog '{module_path}' not found. Check the file path.")
             except commands.NoEntryPointError:
                 logging.error(
-                    f"  > Cog '{module_path}' に setup 関数が見つかりません。Cogとして正しく実装されていますか？")
+                    f"  > No setup function found in Cog '{module_path}'. Is it implemented correctly as a Cog?")
             except Exception as e:
-                logging.error(f"  > Cog '{module_path}' のロード中に予期しないエラーが発生しました: {e}", exc_info=True)
-        logging.info(f"Cogのロードが完了しました。合計 {loaded_cogs_count} 個のCogをロードしました。")
+                logging.error(f"  > Unexpected error occurred while loading Cog '{module_path}': {e}", exc_info=True)
+        logging.info(f"Cog loading complete. Loaded a total of {loaded_cogs_count} Cogs.")
 
-        # スラッシュコマンドの同期
+        # Sync slash commands
         if self.config.get('sync_slash_commands', True):
             try:
                 test_guild_id = self.config.get('test_guild_id')
@@ -315,35 +315,35 @@ class Momoka(commands.Bot):
                     guild_obj = discord.Object(id=int(test_guild_id))
                     synced_commands = await self.tree.sync(guild=guild_obj)
                     logging.info(
-                        f"{len(synced_commands)}個のスラッシュコマンドをテストギルド {test_guild_id} に同期しました。")
+                        f"Synced {len(synced_commands)} slash commands to test guild {test_guild_id}.")
                 else:
                     synced_commands = await self.tree.sync()
-                    logging.info(f"{len(synced_commands)}個のグローバルスラッシュコマンドを同期しました。")
+                    logging.info(f"Synced {len(synced_commands)} global slash commands.")
             except Exception as e:
-                logging.error(f"スラッシュコマンドの同期中にエラーが発生しました: {e}", exc_info=True)
+                logging.error(f"Error occurred while syncing slash commands: {e}", exc_info=True)
         else:
-            logging.info("スラッシュコマンドの同期は設定で無効化されています。")
+            logging.info("Slash command synchronization is disabled in settings.")
 
-        # エラーハンドラの設定
+        # Configure error handler
         self.tree.on_error = self.on_app_command_error
 
     @tasks.loop(seconds=15)
     async def rotate_status(self):
-        """ボットのステータスを定期的に変更する"""
+        """Regularly change bot status"""
         if not self.status_templates:
             return
 
-        # 次のステータスを選択
+        # Select next status
         status_template = self.status_templates[self.status_index]
         self.status_index = (self.status_index + 1) % len(self.status_templates)
 
-        # プレースホルダーを置換
+        # Replace placeholders
         try:
             status_text = status_template.format(guild_count=len(self.guilds))
         except KeyError:
-            status_text = status_template  # プレースホルダーがない場合はそのまま使用
+            status_text = status_template  # Use as-is if no placeholders
 
-        # ステータスを更新
+        # Update status
         try:
             await self.change_presence(activity=discord.Game(name=status_text))
         except (aiohttp.client_exceptions.ClientConnectionResetError, ConnectionResetError) as e:
@@ -353,40 +353,40 @@ class Momoka(commands.Bot):
 
     @rotate_status.before_loop
     async def before_rotate_status(self):
-        """ステータスローテーションタスクの開始を待機"""
+        """Wait for status rotation task to start"""
         await self.wait_until_ready()
 
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
-        """通常コマンド（プレフィックスコマンド）のエラーハンドリング"""
-        # CommandNotFoundエラーは無視（コマンドを探すモードを無効化）
+        """Error handling for regular commands (prefix commands)"""
+        # Ignore CommandNotFound errors (disable command search mode)
         if isinstance(error, commands.CommandNotFound):
-            return  # エラーを無視して何もしない
+            return  # Ignore error and do nothing
         
-        # その他のエラーはログに記録（必要に応じて処理）
-        logging.debug(f"コマンドエラー: {error}")
+        # Log other errors (handle as needed)
+        logging.debug(f"Command error: {error}")
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-        """スラッシュコマンドのエラーハンドリング"""
+        """Error handling for slash commands"""
         if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)):
-            return  # 無視するエラー
+            return  # Ignore errors
 
         if isinstance(error, commands.MissingPermissions):
-            await interaction.response.send_message("❌ このコマンドを実行する権限がありません。", ephemeral=True)
+            await interaction.response.send_message("❌ You don't have permission to execute this command.", ephemeral=True)
         elif isinstance(error, (commands.BotMissingPermissions, discord.Forbidden)):
-            await interaction.response.send_message("❌ ボットに必要な権限がありません。管理者に連絡してください。",
+            await interaction.response.send_message("❌ The bot doesn't have the required permissions. Please contact an admin.",
                                                     ephemeral=True)
         elif isinstance(error, commands.CommandOnCooldown):
-            await interaction.response.send_message(f"⏳ このコマンドは {error.retry_after:.1f} 秒後に再試行できます。",
+            await interaction.response.send_message(f"⏳ This command can be retried after {error.retry_after:.1f} seconds.",
                                                     ephemeral=True)
         elif isinstance(error, (InvalidDiceNotationError, DiceValueError)):
             await interaction.response.send_message(f"❌ {str(error)}", ephemeral=True)
         else:
-            # その他のエラーはログに記録
-            logging.error(f"コマンドエラー: {error}", exc_info=error)
+            # Log other errors
+            logging.error(f"Command error: {error}", exc_info=error)
             if interaction.response.is_done():
-                await interaction.followup.send("❌ コマンドの実行中にエラーが発生しました。", ephemeral=True)
+                await interaction.followup.send("❌ An error occurred while executing the command.", ephemeral=True)
             else:
-                await interaction.response.send_message("❌ コマンドの実行中にエラーが発生しました。", ephemeral=True)
+                await interaction.response.send_message("❌ An error occurred while executing the command.", ephemeral=True)
 
 
 CONFIG_FILE = 'config.yaml'
@@ -394,21 +394,21 @@ DEFAULT_CONFIG_FILE = 'config.default.yaml'
 
 
 # ===============================================================
-# ===== ログビューアGUI関連の関数とクラス ======================
+# ===== Log Viewer GUI Related Functions and Classes ==========
 # ===============================================================
 
 def is_dark_mode():
-    """OSのダークモード設定を検出"""
+    """Detect OS dark mode setting"""
     try:
         if platform.system() == 'Windows':
             import darkdetect
             return darkdetect.isDark()
         return False
     except Exception as e:
-        print(f"ダークモード検出エラー: {e}")
+        print(f"Dark mode detection error: {e}")
         return False
 
-# ダークモードの色設定
+# Dark mode color settings
 DARK_BG = '#1e1e1e'
 DARK_FG = '#e0e0e0'
 DARK_SELECTION_BG = '#264f78'
@@ -418,7 +418,7 @@ DARK_INSERT_FG = '#ffffff'
 DARK_SCROLLBAR_BG = '#2d2d2d'
 DARK_SCROLLBAR_TROUGH = '#1e1e1e'
 
-# ライトモードの色設定
+# Light mode color settings
 LIGHT_BG = '#f0f0f0'
 LIGHT_FG = '#000000'
 LIGHT_SELECTION_BG = '#cce8ff'
@@ -428,11 +428,11 @@ LIGHT_INSERT_FG = '#000000'
 LIGHT_SCROLLBAR_BG = '#e0e0e0'
 LIGHT_SCROLLBAR_TROUGH = '#f0f0f0'
 
-# 現在のテーマを決定
+# Determine current theme
 DARK_THEME = is_dark_mode()
 
 def get_theme_colors():
-    """現在のテーマに応じた色を返す"""
+    """Return colors based on current theme"""
     if DARK_THEME:
         return {
             'bg': DARK_BG,
@@ -493,41 +493,41 @@ class LogViewerApp:
     def __init__(self, root, log_queue):
         self.root = root
         self.log_queue = log_queue
-        self.root.title("MOMOKA ログビューア")
-        self.root.withdraw()  # ウィンドウを非表示にする
-        self.apply_windows_dark_mode()  # 先にダークモードを適用
+        self.root.title("MOMOKA Log Viewer")
+        self.root.withdraw()  # Hide window
+        self.apply_windows_dark_mode()  # Apply dark mode first
         self.root.geometry("1200x800")
         
-        # テーマカラーを取得
+        # Get theme colors
         self.theme = get_theme_colors()
         
-        # メインウィンドウの背景色を設定
+        # Set main window background color
         self.root.configure(bg=self.theme['bg'])
         
-        # 設定ファイルの読み込み
+        # Load configuration file
         self.config_file = "data/log_viewer_config.json"
         self.load_config()
         
-        # スタイルの設定を初期化（self.styleとして保存）
+        # Initialize style settings (save as self.style)
         self.style = ttk.Style()
         self.setup_styles()
         
-        # メニューバーの作成
+        # Create menu bar
         self.create_menu()
         
-        # GUIの作成
+        # Create GUI
         self.setup_gui()
         
-        # キューを定期的にチェック
+        # Regularly check queue
         self.poll_log_queue()
         
-        # ウィンドウクローズ時の処理
+        # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
-        self.root.deiconify()  # ウィンドウを再表示
+        self.root.deiconify()  # Redisplay window
     
     def apply_windows_dark_mode(self):
-        """Windowsのダークモード設定を適用"""
+        """Apply Windows dark mode settings"""
         if DARK_THEME and platform.system() == 'Windows':
             try:
                 DWMWA_USE_IMMERSIVE_DARK_MODE = 20
@@ -540,10 +540,10 @@ class LogViewerApp:
                     ctypes.sizeof(ctypes.c_int(value))
                 )
             except Exception as e:
-                print(f"ダークモードの適用中にエラーが発生しました: {e}")
+                print(f"Error occurred while applying dark mode: {e}")
     
     def create_menu(self):
-        """メニューバーの作成"""
+        """Create menu bar"""
         self.menubar = tk.Menu(self.root, 
                              bg=self.theme['bg'], 
                              fg=self.theme['fg'],
@@ -552,7 +552,7 @@ class LogViewerApp:
                              relief='flat',
                              bd=0)
         
-        # ファイルメニュー
+        # File menu
         file_menu = tk.Menu(self.menubar, 
                           tearoff=0, 
                           bg=self.theme['bg'], 
@@ -561,13 +561,13 @@ class LogViewerApp:
                           activeforeground=self.theme['select_fg'],
                           bd=1,
                           relief='solid')
-        file_menu.add_command(label="終了", 
+        file_menu.add_command(label="Exit", 
                             command=self.root.quit,
                             activebackground=self.theme['select_bg'],
                             activeforeground=self.theme['select_fg'])
-        self.menubar.add_cascade(label="ファイル", menu=file_menu)
+        self.menubar.add_cascade(label="File", menu=file_menu)
         
-        # 表示メニュー
+        # View menu
         view_menu = tk.Menu(self.menubar, 
                           tearoff=0,
                           bg=self.theme['bg'],
@@ -577,17 +577,17 @@ class LogViewerApp:
                           bd=1,
                           relief='solid')
         
-        # 自動スクロールの状態変数を初期化
+        # Initialize auto-scroll state variable
         self.auto_scroll_var = tk.BooleanVar(value=self.config.get("auto_scroll", True))
-        view_menu.add_checkbutton(label="自動スクロール", 
+        view_menu.add_checkbutton(label="Auto-scroll", 
                                 variable=self.auto_scroll_var,
                                 command=self.toggle_auto_scroll,
                                 activebackground=self.theme['select_bg'],
                                 activeforeground=self.theme['select_fg'])
         
-        self.menubar.add_cascade(label="表示", menu=view_menu)
+        self.menubar.add_cascade(label="View", menu=view_menu)
         
-        # ヘルプメニュー
+        # Help menu
         help_menu = tk.Menu(self.menubar, 
                            tearoff=0,
                            bg=self.theme['bg'],
@@ -596,38 +596,38 @@ class LogViewerApp:
                            activeforeground=self.theme['select_fg'],
                            bd=1,
                            relief='solid')
-        help_menu.add_command(label="バージョン情報",
+        help_menu.add_command(label="About",
                             command=self.show_about,
                             activebackground=self.theme['select_bg'],
                             activeforeground=self.theme['select_fg'])
-        self.menubar.add_cascade(label="ヘルプ", menu=help_menu)
+        self.menubar.add_cascade(label="Help", menu=help_menu)
         
         self.root.config(menu=self.menubar)
         
-        # メニューのスタイルオプション
+        # Menu style options
         self.root.option_add('*Menu*background', self.theme['bg'])
         self.root.option_add('*Menu*foreground', self.theme['fg'])
         self.root.option_add('*Menu*activeBackground', self.theme['select_bg'])
         self.root.option_add('*Menu*activeForeground', self.theme['select_fg'])
     
     def setup_styles(self):
-        """スタイルの初期化のみを行う"""
-        # テーマの設定
+        """Only perform style initialization"""
+        # Theme settings
         self.style.theme_use('clam')
         
-        # フレームのスタイル
+        # Frame style
         self.style.configure('TFrame', 
                       background=self.theme['bg'],
                       borderwidth=0)
         
-        # ラベルのスタイル
+        # Label style
         self.style.configure('TLabel', 
                       background=self.theme['bg'], 
                       foreground=self.theme['fg'],
                       font=('Meiryo UI', 9),
                       padding=2)
         
-        # ボタンのスタイル
+        # Button style
         self.style.configure('TButton',
                       background=self.theme['button_bg'],
                       foreground=self.theme['button_fg'],
@@ -642,7 +642,7 @@ class LogViewerApp:
                            ('pressed', self.theme['select_fg'])],
                  relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
         
-        # エントリーのスタイル
+        # Entry style
         self.style.configure('TEntry',
                       fieldbackground=self.theme['entry_bg'],
                       foreground=self.theme['entry_fg'],
@@ -650,7 +650,7 @@ class LogViewerApp:
                       borderwidth=1,
                       relief='solid')
         
-        # コンボボックスのスタイル
+        # Combobox style
         self.style.configure('TCombobox',
                       fieldbackground=self.theme['entry_bg'],
                       background=self.theme['entry_bg'],
@@ -666,7 +666,7 @@ class LogViewerApp:
                       selectbackground=[('readonly', self.theme['select_bg'])],
                       selectforeground=[('readonly', self.theme['select_fg'])])
         
-        # スクロールバーのスタイル
+        # Scrollbar style
         self.style.configure('Vertical.TScrollbar',
                       background=self.theme['scrollbar_bg'],
                       troughcolor=self.theme['scrollbar_trough'],
@@ -690,7 +690,7 @@ class LogViewerApp:
         self.style.map('Vertical.TScrollbar',
                       background=[('active', self.theme['scrollbar_bg'])])
         
-        # ラベルフレームのスタイル
+        # Labelframe style
         self.style.configure('TLabelframe',
                       background=self.theme['bg'],
                       foreground=self.theme['fg'],
@@ -701,7 +701,7 @@ class LogViewerApp:
                       background=self.theme['bg'],
                       foreground=self.theme['fg'])
                       
-        # チェックボタンのスタイル
+        # Checkbutton style
         self.style.configure('TCheckbutton',
                       background=self.theme['bg'],
                       foreground=self.theme['fg'],
@@ -713,7 +713,7 @@ class LogViewerApp:
                  background=[('active', self.theme['bg'])],
                  foreground=[('active', self.theme['fg'])])
         
-        # ラジオボタンのスタイル
+        # Radiobutton style
         self.style.configure('TRadiobutton',
                       background=self.theme['bg'],
                       foreground=self.theme['fg'],
@@ -749,7 +749,7 @@ class LogViewerApp:
                     saved_config = json.load(f)
                     self.config.update(saved_config)
         except Exception as e:
-            print(f"設定ファイルの読み込み中にエラーが発生しました: {e}")
+            print(f"Error occurred while loading configuration file: {e}")
     
     def save_config(self):
         """設定ファイルの保存"""
